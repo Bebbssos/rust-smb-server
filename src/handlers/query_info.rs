@@ -48,8 +48,10 @@ pub async fn handle(
         None => return HandlerResponse::err(ntstatus::STATUS_FILE_CLOSED),
     };
 
-    // Pull the file index (we use FileId.volatile as the unique handle id).
-    let (file_index, info_res) = {
+    // FileId.volatile is only a fallback: it changes on every re-open, so a client
+    // that keys inodes on it (e.g. the Linux cifs client) sees the handle "move"
+    // and reports a stale file handle. Prefer the backend's stable `file_index`.
+    let (fid_volatile, info_res) = {
         let open = open_arc.read().await;
         let fid = open.file_id;
         match open.handle.as_ref() {
@@ -63,6 +65,11 @@ pub async fn handle(
             let info = match info_res {
                 Ok(i) => i,
                 Err(e) => return HandlerResponse::err(e.to_nt_status()),
+            };
+            let file_index = if info.file_index != 0 {
+                info.file_index
+            } else {
+                fid_volatile
             };
             match req.file_information_class {
                 ic::FILE_BASIC_INFORMATION => ic::encode_file_basic_information(&info),
