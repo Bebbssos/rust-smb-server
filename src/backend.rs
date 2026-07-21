@@ -7,7 +7,7 @@
 use async_trait::async_trait;
 use std::time::SystemTime;
 
-use crate::error::{SmbError, SmbResult};
+use crate::error::SmbResult;
 use crate::path::SmbPath;
 
 // ---------------------------------------------------------------------------
@@ -209,30 +209,15 @@ pub trait Handle: Send + Sync {
     /// post-filters as needed for QUERY_DIRECTORY.
     async fn list_dir(&self, pattern: Option<&str>) -> SmbResult<Vec<DirEntry>>;
 
+    /// `FSCTL_PIPE_TRANSCEIVE`: write then read in one round trip. Only
+    /// meaningful for named-pipe-style handles (e.g. the `srvsvc` RPC
+    /// pipe on `IPC$`); the default implementation composes `write_owned`
+    /// and `read` so ordinary file backends don't need to think about it.
+    async fn transceive(&self, offset: u64, data: Vec<u8>, max_out: u32) -> SmbResult<bytes::Bytes> {
+        self.write_owned(offset, data).await?;
+        self.read(0, max_out).await
+    }
+
     /// Close the handle. Boxed self lets implementors consume internal state.
     async fn close(self: Box<Self>) -> SmbResult<()>;
-}
-
-/// No-op backend used for the synthetic IPC$ share. Every method returns
-/// [`SmbError::NotSupported`]. Exists so we can hand a `ShareBackend`
-/// implementor to the IPC$ tree without any real storage attached.
-pub(crate) struct NotSupportedBackend;
-
-#[async_trait]
-impl ShareBackend for NotSupportedBackend {
-    async fn open(&self, _path: &SmbPath, _opts: OpenOptions) -> SmbResult<Box<dyn Handle>> {
-        Err(SmbError::NotSupported)
-    }
-    async fn unlink(&self, _path: &SmbPath) -> SmbResult<()> {
-        Err(SmbError::NotSupported)
-    }
-    async fn rename(&self, _from: &SmbPath, _to: &SmbPath) -> SmbResult<()> {
-        Err(SmbError::NotSupported)
-    }
-    fn capabilities(&self) -> BackendCapabilities {
-        BackendCapabilities {
-            is_read_only: true,
-            case_sensitive: false,
-        }
-    }
 }

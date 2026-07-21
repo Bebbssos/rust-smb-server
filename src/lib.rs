@@ -28,6 +28,7 @@ pub(crate) mod info_class;
 pub mod ntstatus;
 mod path;
 mod proto;
+mod rpc;
 mod server;
 mod utils;
 

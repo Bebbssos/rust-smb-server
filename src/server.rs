@@ -65,13 +65,17 @@ impl ShareBindings {
         })
     }
 
-    /// Synthetic IPC$ share. The backend is a no-op; clients that try to
-    /// CREATE on it get `STATUS_NOT_SUPPORTED` from the CREATE handler.
-    pub fn ipc() -> Arc<Self> {
+    /// Synthetic IPC$ share. The backend only understands the `srvsvc`
+    /// named pipe (share enumeration, MS-SRVS `NetrShareEnumAll`); every
+    /// other CREATE on it still gets `STATUS_NOT_SUPPORTED`. Mode is
+    /// `Public` (not read-only) so a WRITE carrying a DCE/RPC bind/request
+    /// isn't clamped to read-only access — this doesn't loosen real
+    /// filesystem access, it only lets the pipe be written to.
+    pub fn ipc(server: &Arc<ServerState>) -> Arc<Self> {
         Self::new(
             "IPC$".to_string(),
-            Arc::new(crate::backend::NotSupportedBackend),
-            ShareMode::PublicReadOnly,
+            Arc::new(crate::rpc::IpcBackend::new(server.clone())),
+            ShareMode::Public,
             HashMap::new(),
             true,
         )
