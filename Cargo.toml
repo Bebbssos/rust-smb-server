@@ -1,11 +1,14 @@
 [package]
-name = "smb-server"
+name = "ixr-smb-server"
 version = "0.4.1"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
-repository = "https://github.com/paltaio/rust-smb-server"
-description = "SMB2/3 file-sharing server library with pluggable storage backends."
+repository = "https://github.com/Bebbssos/rust-smb-server"
+description = "Fork of smb-server with fixes for internxt-cli-rust"
+
+[lib]
+name = "smb_server"
 
 [workspace]
 resolver = "2"
@@ -19,10 +22,10 @@ version = "0.4.1"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
-repository = "https://github.com/paltaio/rust-smb-server"
+repository = "https://github.com/Bebbssos/rust-smb-server"
 
 [workspace.dependencies]
-smb-server = { path = ".", version = "0.4.1" }
+smb-server = { path = ".", package = "ixr-smb-server", version = "0.4.1" }
 
 tokio = { version = "1.40", features = ["full"] }
 binrw = "0.15"
