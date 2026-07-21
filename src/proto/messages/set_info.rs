@@ -3,6 +3,7 @@
 use binrw::{BinRead, BinWrite, binrw};
 use std::io::Cursor;
 
+use super::bounded::read_bounded_vec_u8;
 use super::create::FileId;
 use crate::proto::error::ProtoResult;
 
@@ -19,7 +20,10 @@ pub struct SetInfoRequest {
     pub reserved: u16,
     pub additional_information: u32,
     pub file_id: FileId,
-    #[br(count = buffer_length as usize)]
+    /// `buffer_length` is a raw client-controlled `u32`; parsed with
+    /// [`read_bounded_vec_u8`] to avoid allocating past what the buffer
+    /// actually contains.
+    #[br(parse_with = read_bounded_vec_u8, args(buffer_length as usize))]
     pub buffer: Vec<u8>,
 }
 
@@ -90,5 +94,14 @@ mod tests {
         r.write_to(&mut buf).unwrap();
         assert_eq!(SetInfoResponse::parse(&buf).unwrap(), r);
         assert_eq!(buf.len(), 2);
+    }
+
+    /// Regression test for the unbounded-allocation DoS: fixed 32-byte
+    /// prefix only, `buffer_length` claiming a multi-GiB buffer.
+    #[test]
+    fn oversized_buffer_length_is_rejected_not_allocated() {
+        let mut buf = vec![0u8; 32];
+        buf[4..8].copy_from_slice(&0xFFFF_FFF0u32.to_le_bytes());
+        assert!(SetInfoRequest::parse(&buf).is_err());
     }
 }

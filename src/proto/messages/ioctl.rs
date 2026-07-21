@@ -3,6 +3,7 @@
 use binrw::{BinRead, BinWrite, binrw};
 use std::io::Cursor;
 
+use super::bounded::read_bounded_vec_u8;
 use super::create::FileId;
 use crate::proto::error::ProtoResult;
 
@@ -93,7 +94,10 @@ pub struct IoctlRequest {
     pub max_output_response: u32,
     pub flags: u32,
     pub reserved2: u32,
-    #[br(count = input_count as usize)]
+    /// `input_count` is a raw client-controlled `u32`; parsed with
+    /// [`read_bounded_vec_u8`] to avoid allocating past what the buffer
+    /// actually contains.
+    #[br(parse_with = read_bounded_vec_u8, args(input_count as usize))]
     pub input: Vec<u8>,
 }
 
@@ -202,5 +206,14 @@ mod tests {
         let mut buf = Vec::new();
         r.write_to(&mut buf).unwrap();
         assert_eq!(IoctlResponse::parse(&buf).unwrap(), r);
+    }
+
+    /// Regression test for the unbounded-allocation DoS: fixed 56-byte
+    /// prefix only, `input_count` claiming a multi-GiB buffer.
+    #[test]
+    fn oversized_input_count_is_rejected_not_allocated() {
+        let mut buf = vec![0u8; 56];
+        buf[28..32].copy_from_slice(&0xFFFF_FFF0u32.to_le_bytes());
+        assert!(IoctlRequest::parse(&buf).is_err());
     }
 }

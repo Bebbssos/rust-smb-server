@@ -8,6 +8,7 @@
 use binrw::{BinRead, BinWrite, binrw};
 use std::io::Cursor;
 
+use super::bounded::read_bounded_vec_u8;
 use crate::proto::error::{ProtoError, ProtoResult};
 
 /// SMB2 FileId — opaque 16 bytes (volatile + persistent).
@@ -65,11 +66,16 @@ pub struct CreateRequest {
     pub create_contexts_offset: u32,
     pub create_contexts_length: u32,
     /// UTF-16LE filename.
-    #[br(count = name_length as usize)]
+    ///
+    /// `name_length` and `create_contexts_length` below are raw
+    /// client-controlled fields; both are parsed with [`read_bounded_vec_u8`]
+    /// so an oversized declared length can't force an allocation past what
+    /// the buffer actually contains.
+    #[br(parse_with = read_bounded_vec_u8, args(name_length as usize))]
     pub name: Vec<u8>,
     /// Raw create-contexts chain bytes; parse with
     /// [`CreateContext::parse_chain`].
-    #[br(count = create_contexts_length as usize)]
+    #[br(parse_with = read_bounded_vec_u8, args(create_contexts_length as usize))]
     pub create_contexts: Vec<u8>,
 }
 
@@ -433,5 +439,22 @@ mod tests {
         assert!(buf.is_empty());
         let decoded = CreateContext::parse_chain(&buf).unwrap();
         assert!(decoded.is_empty());
+    }
+
+    /// Regression test for the unbounded-allocation DoS: fixed 56-byte
+    /// prefix only, `create_contexts_length` claiming a multi-GiB blob.
+    #[test]
+    fn oversized_create_contexts_length_is_rejected_not_allocated() {
+        let mut buf = vec![0u8; 56];
+        buf[52..56].copy_from_slice(&0xFFFF_FFF0u32.to_le_bytes());
+        assert!(CreateRequest::parse(&buf).is_err());
+    }
+
+    /// Same, but for the (u16, so lower-severity) `name_length` field.
+    #[test]
+    fn oversized_name_length_is_rejected_not_allocated() {
+        let mut buf = vec![0u8; 56];
+        buf[46..48].copy_from_slice(&0xFFFFu16.to_le_bytes());
+        assert!(CreateRequest::parse(&buf).is_err());
     }
 }

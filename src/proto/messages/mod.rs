@@ -7,6 +7,7 @@
 //! The crate does **not** implement command behavior — it only encodes/decodes
 //! the wire bytes. The server crate owns dispatch and state.
 
+pub mod bounded;
 pub mod cancel;
 pub mod change_notify;
 pub mod close;
