@@ -50,10 +50,11 @@ pub async fn handle(
     drop(sess);
 
     // IPC$: synthetic share. Accept at TREE_CONNECT (Windows always probes
-    // it before mounting an actual share); downstream CREATE/IOCTL on it
-    // return NotSupported via the no-op backend.
+    // it before mounting an actual share); downstream CREATE on it only
+    // understands the `srvsvc` pipe (share enumeration) — everything else
+    // returns NotSupported.
     let share = if share_name.eq_ignore_ascii_case("IPC$") {
-        crate::server::ShareBindings::ipc()
+        crate::server::ShareBindings::ipc(server)
     } else {
         match server.find_share(&share_name).await {
             Some(s) => s,
