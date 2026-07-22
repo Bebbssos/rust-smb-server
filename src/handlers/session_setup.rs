@@ -11,7 +11,7 @@ use crate::proto::header::Smb2Header;
 use crate::proto::messages::{Dialect, SessionSetupRequest, SessionSetupResponse};
 use tracing::{debug, info, warn};
 
-use crate::conn::state::{Connection, Session};
+use crate::conn::state::{Connection, MAX_PENDING_AUTHS_PER_CONNECTION, Session};
 use crate::dispatch::HandlerResponse;
 use crate::ntstatus;
 use crate::server::ServerState;
@@ -97,6 +97,21 @@ pub async fn handle(
     }
 
     if is_first_round {
+        // Bound the number of incomplete auth exchanges this connection can
+        // accumulate. A client that keeps starting SESSION_SETUP without
+        // ever finishing it would otherwise grow `pending_auths` without
+        // limit for the life of the connection.
+        {
+            let pa = conn.pending_auths.read().await;
+            if pa.len() >= MAX_PENDING_AUTHS_PER_CONNECTION {
+                warn!(
+                    limit = MAX_PENDING_AUTHS_PER_CONNECTION,
+                    "too many incomplete SESSION_SETUP exchanges on connection"
+                );
+                return HandlerResponse::err(ntstatus::STATUS_INSUFFICIENT_RESOURCES);
+            }
+        }
+
         // Allocate a fresh session id and start the NTLM state machine.
         let new_sid = conn.alloc_session_id();
         let mut server_challenge = [0u8; 8];

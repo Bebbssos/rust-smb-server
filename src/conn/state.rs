@@ -21,6 +21,15 @@ use crate::server::ShareBindings;
 /// same form the client opened with.
 pub type PendingAuth = Arc<Mutex<(NtlmServer, bool)>>;
 
+/// Cap on concurrent incomplete (first-round-only) SESSION_SETUP exchanges
+/// per connection. Without this, a client that repeatedly starts but never
+/// finishes SESSION_SETUP accumulates an unbounded number of entries in
+/// `Connection::pending_auths` for the life of the TCP connection — a
+/// low-severity but real memory-growth DoS. A handful of legitimate
+/// concurrent auth attempts (e.g. retries, multiple users) is normal; dozens
+/// on one connection is not.
+pub const MAX_PENDING_AUTHS_PER_CONNECTION: usize = 16;
+
 // ---------------------------------------------------------------------------
 // Connection
 // ---------------------------------------------------------------------------
