@@ -1,6 +1,6 @@
 [package]
 name = "ixr-smb-server"
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
@@ -18,14 +18,14 @@ members = [
 ]
 
 [workspace.package]
-version = "0.5.0"
+version = "0.5.1"
 edition = "2024"
 rust-version = "1.95"
 license = "MIT"
 repository = "https://github.com/Bebbssos/rust-smb-server"
 
 [workspace.dependencies]
-smb-server = { path = ".", package = "ixr-smb-server", version = "0.5.0" }
+smb-server = { path = ".", package = "ixr-smb-server", version = "0.5.1" }
 
 tokio = { version = "1.40", features = ["full"] }
 binrw = "0.15"

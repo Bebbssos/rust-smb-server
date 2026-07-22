@@ -1,18 +1,18 @@
 # rust-smb-server
 
-SMB server in Rust.
+SMB server in Rust. This is [Bebbssos/rust-smb-server](https://github.com/Bebbssos/rust-smb-server), a fork with fixes for [internxt-cli-rust](https://github.com/Bebbssos/internxt-cli-rust), published as `ixr-smb-server`.
 
 ## Install
 
 ```sh
-cargo add smb-server
+cargo add ixr-smb-server
 ```
 
 Or in `Cargo.toml`:
 
 ```toml
 [dependencies]
-smb-server = "0.4"
+ixr-smb-server = "0.5.1"
 ```
 
 ## Run the example
