@@ -9,6 +9,7 @@
 use binrw::{BinRead, BinWrite, binrw};
 use std::io::Cursor;
 
+use super::bounded::read_bounded_vec_u8;
 use super::create::FileId;
 use crate::proto::error::ProtoResult;
 
@@ -29,7 +30,12 @@ pub struct WriteRequest {
     pub flags: u32,
     /// MS-SMB2: at least 1 byte of payload buffer is required on the wire
     /// even when length=0.
-    #[br(count = if length == 0 { 1 } else { length as usize })]
+    ///
+    /// `length` is a raw client-controlled `u32`; parsed with
+    /// [`read_bounded_vec_u8`] so a malicious/corrupt oversized value can't
+    /// force an allocation past what the buffer actually contains (see
+    /// module docs on `bounded`).
+    #[br(parse_with = read_bounded_vec_u8, args(if length == 0 { 1 } else { length as usize }))]
     pub data: Vec<u8>,
 }
 
@@ -119,5 +125,17 @@ mod tests {
         let mut buf = Vec::new();
         r.write_to(&mut buf).unwrap();
         assert_eq!(WriteResponse::parse(&buf).unwrap(), r);
+    }
+
+    /// Regression test for the unbounded-allocation DoS: a malformed packet
+    /// with only the fixed 48-byte prefix (no data bytes) but `length`
+    /// claiming a multi-GiB payload must fail cleanly rather than trying to
+    /// allocate ~4 GiB per connection (which, pre-fix, could abort the whole
+    /// process via `handle_alloc_error` on allocation failure).
+    #[test]
+    fn oversized_length_is_rejected_not_allocated() {
+        let mut buf = vec![0u8; 48];
+        buf[4..8].copy_from_slice(&0xFFFF_FFF0u32.to_le_bytes());
+        assert!(WriteRequest::parse(&buf).is_err());
     }
 }

@@ -3,6 +3,7 @@
 use binrw::{BinRead, BinWrite, binrw};
 use std::io::Cursor;
 
+use super::bounded::read_bounded_vec_u8;
 use super::create::FileId;
 use crate::proto::error::ProtoResult;
 
@@ -48,7 +49,11 @@ pub struct QueryInfoRequest {
     pub file_id: FileId,
     /// Optional input buffer (used by FILE/FS info classes that need it, e.g.
     /// `FileFullEaInformation` extended-attribute name lists).
-    #[br(count = input_buffer_length as usize)]
+    ///
+    /// `input_buffer_length` is a raw client-controlled `u32`; parsed with
+    /// [`read_bounded_vec_u8`] to avoid allocating past what the buffer
+    /// actually contains.
+    #[br(parse_with = read_bounded_vec_u8, args(input_buffer_length as usize))]
     pub input_buffer: Vec<u8>,
 }
 
@@ -136,5 +141,14 @@ mod tests {
         let mut buf = Vec::new();
         r.write_to(&mut buf).unwrap();
         assert_eq!(QueryInfoResponse::parse(&buf).unwrap(), r);
+    }
+
+    /// Regression test for the unbounded-allocation DoS: fixed 40-byte
+    /// prefix only, `input_buffer_length` claiming a multi-GiB buffer.
+    #[test]
+    fn oversized_input_buffer_length_is_rejected_not_allocated() {
+        let mut buf = vec![0u8; 40];
+        buf[12..16].copy_from_slice(&0xFFFF_FFF0u32.to_le_bytes());
+        assert!(QueryInfoRequest::parse(&buf).is_err());
     }
 }
